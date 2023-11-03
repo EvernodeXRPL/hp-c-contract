@@ -107,7 +107,8 @@ enum EXECUTION_MODE
 {
     CONSENSUS,
     CONSENSUS_FALLBACK,
-    READ_REQUEST
+    READ_REQUEST,
+    UNKNOWN_MODE
 };
 
 struct hp_user_input
@@ -626,7 +627,7 @@ enum EXECUTION_MODE hp_get_exec_mode(char *mode_str)
         return READ_REQUEST;
 
     // Handle unknown cases here
-    return -1;
+    return UNKNOWN_MODE;
 }
 
 /**
