@@ -103,6 +103,13 @@ enum MODE
     PRIVATE
 };
 
+enum EXECUTION_MODE
+{
+    CONSENSUS,
+    CONSENSUS_FALLBACK,
+    READ_REQUEST
+};
+
 struct hp_user_input
 {
     off_t offset;
@@ -183,12 +190,18 @@ struct hp_round_limits_config
     size_t exec_timeout;
 };
 
+struct fallback_config
+{
+    bool execute;
+};
+
 struct consensus_config
 {
     enum MODE mode;
     uint32_t roundtime;
     uint32_t stage_slice;
     uint16_t threshold;
+    struct fallback_config fallback;
 };
 
 struct npl_config
@@ -213,7 +226,7 @@ struct hp_config
 
 struct hp_contract_context
 {
-    bool readonly;
+    char *mode;
     uint64_t timestamp;
     char contract_id[HP_CONTRACT_ID_SIZE + 1]; // +1 for null char.
     struct hp_public_key public_key;
@@ -222,6 +235,7 @@ struct hp_contract_context
     char lcl_hash[HP_HASH_SIZE + 1]; // +1 for null char.
     struct hp_users_collection users;
     struct hp_unl_collection unl;
+    enum EXECUTION_MODE (*get_exec_mode)(char *mode_str);
 };
 
 struct __hp_contract
@@ -248,6 +262,7 @@ int hp_update_peers(const char *add_peers[], const size_t add_peers_count, const
 void hp_set_config_string(char **config_str, const char *value, const size_t value_size);
 void hp_set_config_unl(struct hp_config *config, const struct hp_public_key *new_unl, const size_t new_unl_count);
 void hp_free_config(struct hp_config *config);
+enum EXECUTION_MODE hp_get_exec_mode(char *mode);
 
 void __hp_parse_args_json(const struct json_object_s *object);
 int __hp_write_control_msg(const void *buf, const uint32_t len);
@@ -288,12 +303,16 @@ int hp_init_contract()
         {
             // Create and populate hotpocket context.
             __hpc.cctx = (struct hp_contract_context *)malloc(sizeof(struct hp_contract_context));
+            __hpc.cctx->mode = (char *)malloc(25 * sizeof(char));
             __hp_parse_args_json(object);
             __HP_FREE(root);
+
+            __hpc.cctx->get_exec_mode = hp_get_exec_mode;
 
             return 0;
         }
     }
+
     __HP_FREE(root);
     return -1;
 }
@@ -519,7 +538,9 @@ int hp_update_config(const struct hp_config *config)
 {
     struct hp_contract_context *cctx = __hpc.cctx;
 
-    if (cctx->readonly)
+    enum EXECUTION_MODE exec_mode = cctx->get_exec_mode(cctx->mode);
+
+    if (exec_mode == READ_REQUEST)
     {
         fprintf(stderr, "Config update not allowed in readonly mode.\n");
         return -1;
@@ -593,6 +614,19 @@ int hp_update_config(const struct hp_config *config)
 
     close(fd);
     return 0;
+}
+
+enum EXECUTION_MODE hp_get_exec_mode(char *mode_str)
+{
+    if (strcmp(mode_str, "consensus") == 0)
+        return CONSENSUS;
+    else if (strcmp(mode_str, "consensus_fallback") == 0)
+        return CONSENSUS_FALLBACK;
+    else if (strcmp(mode_str, "read_req") == 0)
+        return READ_REQUEST;
+
+    // Handle unknown cases here
+    return -1;
 }
 
 /**
@@ -1076,9 +1110,9 @@ void __hp_parse_args_json(const struct json_object_s *object)
         {
             __HP_ASSIGN_UINT64(cctx->timestamp, elem);
         }
-        else if (strcmp(k->string, "readonly") == 0)
+        else if (strcmp(k->string, "mode") == 0)
         {
-            __HP_ASSIGN_BOOL(cctx->readonly, elem);
+            __HP_ASSIGN_CHAR_PTR(cctx->mode, elem);
         }
         else if (strcmp(k->string, "lcl_seq_no") == 0)
         {
