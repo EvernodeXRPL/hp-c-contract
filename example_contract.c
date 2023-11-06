@@ -7,7 +7,7 @@
 
 void store_timestamp(const uint64_t timestamp);
 void process_user_message(const struct hp_user *user, const void *buf, const uint32_t len);
-void contract_handler(const struct hp_contract_context *ctx, bool is_readonly);
+void contract_handler(const struct hp_contract_context *ctx, const bool is_readonly);
 void fallback_mode_handler(const struct hp_contract_context *ctx);
 
 int main(int argc, char **argv)
@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     const struct hp_contract_context *ctx = hp_get_context();
 
     // Get the contract execution mode.
-    enum EXECUTION_MODE exec_mode = ctx->get_exec_mode(ctx->mode);
+    const enum EXECUTION_MODE exec_mode = ctx->get_exec_mode(ctx->mode);
 
     // Defining the relevant behaviour based on the execution mode.
     switch (exec_mode)
@@ -90,7 +90,7 @@ void process_user_message(const struct hp_user *user, const void *buf, const uin
     }
 }
 
-void contract_handler(const struct hp_contract_context *ctx, bool is_readonly)
+void contract_handler(const struct hp_contract_context *ctx, const bool is_readonly)
 {
     if (!is_readonly)
         store_timestamp(ctx->timestamp);
@@ -146,6 +146,8 @@ void contract_handler(const struct hp_contract_context *ctx, bool is_readonly)
 
 void fallback_mode_handler(const struct hp_contract_context *ctx)
 {
+    printf("Fallback mode: Non consensus execution count: %u\n", ctx->non_consensus_rounds);
+
     // NPL message send example:
     hp_write_npl_msg("Hello!", 6);
 
